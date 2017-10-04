@@ -61,14 +61,14 @@ struct ProAxeSE_data_t ratetable;
 struct NSPO_GPSR_SCI_TLM_t gpsr_data;
 
 struct thread_info_t rs422_tx_info[THREADS_NUM] ={
-	/*thread_name,    port_name,     rs422_fd, payload_size, freq, go_flag, payload, mutex, cond*/
-	{"imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,   0, (void *) &imu_data, &imu01_mutex, &imu01_cond},
-	{"rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,   0, (void *) &(ratetable.rate.x), &rate_tbl_x_mutex, &rate_tbl_x_cond},
-	{"rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,   0, (void *) &(ratetable.rate.y), &rate_tbl_y_mutex, &rate_tbl_y_cond},
-	{"rate_tbl_z",   "/dev/ttyAP3",  -1, 4,            50,   0, (void *) &(ratetable.rate.z), &rate_tbl_z_mutex, &rate_tbl_z_cond},
-	{"imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     1,    0, (void *) &imu_data, &imu02_mutex, &imu02_cond},
-	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,    0, (void *) &gpsr_data, &gpsr01_mutex, &gpsr01_cond},
-	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,    0, (void *) &gpsr_data, &gpsr02_mutex, &gpsr02_cond}
+	/*thread_name,    port_name,     rs422_fd, payload_size, freq, go_flag, payload,           mutex,             cond*/
+	{"imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           &imu01_mutex,      &imu01_cond},
+	{"rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,    0, (void *) &(ratetable.rate.x), &rate_tbl_x_mutex, &rate_tbl_x_cond},
+	{"rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,    0, (void *) &(ratetable.rate.y), &rate_tbl_y_mutex, &rate_tbl_y_cond},
+	{"rate_tbl_z",   "/dev/ttyAP3",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), &rate_tbl_z_mutex, &rate_tbl_z_cond},
+	{"imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           &imu02_mutex,      &imu02_cond},
+	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          &gpsr01_mutex,     &gpsr01_cond},
+	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          &gpsr02_mutex,     &gpsr02_cond}
 };
 
 void dump_thread_info(struct thread_info_t *info)

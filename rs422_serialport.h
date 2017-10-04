@@ -31,7 +31,6 @@ typedef enum _ENUM_RS422_CMD_ID {
 struct data_frame_header_t {
 	uint32_t payload_len;
 	uint32_t crc;
-	uint32_t seq_no;
 } __attribute__((packed));
 /* 
 *
