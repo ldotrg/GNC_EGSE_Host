@@ -15,10 +15,10 @@
 #define RS422_SERIAL_BUFFER_SIZE 96
 #define SWAP32(x) \
 	((uint32_t) (\
-			   (((uint32_t) (x) & (uint32_t) 0x000000ffUL) << 24) | \
-			   (((uint32_t) (x) & (uint32_t) 0x0000ff00UL) << 8) | \
-			   (((uint32_t) (x) & (uint32_t) 0x00ff0000UL) >> 8) | \
-			   (((uint32_t) (x) & (uint32_t) 0xff000000UL) >> 24)))
+	(((uint32_t) (x) & (uint32_t) 0x000000ffUL) << 24) | \
+	(((uint32_t) (x) & (uint32_t) 0x0000ff00UL) << 8) | \
+	(((uint32_t) (x) & (uint32_t) 0x00ff0000UL) >> 8) | \
+	(((uint32_t) (x) & (uint32_t) 0xff000000UL) >> 24)))
 
 #define cpu2le32(x) SWAP32((x))
 
@@ -31,6 +31,7 @@ typedef enum _ENUM_RS422_CMD_ID {
 struct data_frame_header_t {
 	uint32_t payload_len;
 	uint32_t crc;
+	uint32_t seq_no;
 } __attribute__((packed));
 /* 
 *
@@ -63,8 +64,15 @@ struct ProAxeSE_data_t {
 typedef void *(*work_thread_f)(void *arg);
 
 struct thread_info_t {
+	char thread_name[12];
+	char port_name[12];
+	int32_t rs422_fd;
+	uint32_t payload_size;
+	uint32_t freq;
+	uint8_t go_flag;
 	void *payload;
-	work_thread_f work_thread;
+	pthread_mutex_t *mutex;
+	pthread_cond_t *cond;
 };
 
 
