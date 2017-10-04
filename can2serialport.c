@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include "rs422_serialport.h"
 #include <arpa/inet.h>
+#include "gpio_sync_timer/DIInterrupt.h"
 
 #define RX_COUNTDOWN		(6)
 #define THREADS_NUM		(7)
@@ -165,7 +166,6 @@ int main(int argc,char **argv)
 	int rx_count = RX_COUNTDOWN;
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
-
 	if((socket_can = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
 		perror("Error while opening socket");
 		return -1;
