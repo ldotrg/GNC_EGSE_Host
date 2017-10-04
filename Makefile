@@ -34,7 +34,8 @@ deps := $(OBJECTS:%.o=%.o.d)
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 $(BIN_IMAGE): $(OBJECTS)
-	$(CC) -o $@ $(OBJECTS) $(CFLAGS)
+	$(CXX) -o $@ $(OBJECTS) $(CXXFLAGS) $(CFLAGS)
+#	$(CC) -o $@ $(OBJECTS) $(CFLAGS)
 	$(CC) -Wall -g sendCan.c -o sendCan
 
 clean:

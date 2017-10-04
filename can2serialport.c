@@ -153,6 +153,14 @@ void *rs422_tx_downlink_thread(void *arg)
 	}
 }
 
+
+void *gpio_ttl_thread(void *arg)
+{
+	int *ret = NULL;
+	gpio_ttl_init_wrapper();
+	return ret;
+}
+
 int main(int argc,char **argv)
 {
 	int socket_can;
@@ -166,6 +174,7 @@ int main(int argc,char **argv)
 	int rx_count = RX_COUNTDOWN;
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
+	pthread_t gpio_thread_id;
 	if((socket_can = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
 		perror("Error while opening socket");
 		return -1;
@@ -191,8 +200,13 @@ int main(int argc,char **argv)
 		printf("setsockopt fail\n");
 	printf("using %s to read\n", ifname);
 
-
-	/*Dta Pattern init*/
+	/* GPIO Create*/
+	ret = pthread_create(&gpio_thread_id, NULL, gpio_ttl_thread, NULL);
+	if (ret) {
+		printf("ERROR; return code from gpio_thread_id is %d\n", ret);
+		exit(-1);
+	}
+	/*Data Pattern init*/
 	imu_pattern_init(&imu_data);
 	rate_table_pattern_init(&ratetable);
 	gpsr_pattern_init((void *)&gpsr_data);
@@ -245,6 +259,7 @@ int main(int argc,char **argv)
 	for (idx = 0; idx < THREADS_NUM; idx++) {
 		pthread_join(threads_id[idx], NULL);
 	}
+	pthread_join(gpio_thread_id, NULL);
 
 	return 0;
 }
