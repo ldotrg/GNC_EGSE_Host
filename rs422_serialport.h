@@ -84,5 +84,6 @@ int32_t gpsr_pattern_init(void *gpsr_data);
 void hex_dump(char *str, uint8_t *pSrcBufVA, uint32_t SrcBufLen);
 uint32_t crc32(uint32_t crc, const char *buf, uint32_t len);
 uint32_t invert_crc32(uint32_t crc);
+uint32_t crc_checker(uint32_t rx_crc, const char *buf, uint32_t size);
 
 #endif /* __RS422_SERIALPORT__ */

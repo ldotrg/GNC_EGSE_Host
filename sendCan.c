@@ -51,6 +51,11 @@ struct egse2dm {
 	uint8_t II_valve_control_2[II_VALUE_CONTROL_SIZE];
 } __attribute__((packed));
 
+struct egse2dm_header_t {
+	uint32_t payload_len;
+	uint32_t crc;
+} __attribute__((packed));
+
 int egse2dm_cmd_init(struct egse2dm *cmd)
 {
 	uint32_t i;
@@ -114,6 +119,28 @@ error:
 	return ret;
 }
 
+uint32_t crc32(uint32_t crc, const char *buf, uint32_t len)
+{
+	uint32_t	crc_30_00;
+	uint32_t	crc_31;
+	uint32_t	buf_value;
+	
+        if (buf == 0) return 0L;
+
+	buf_value =  *((uint32_t *) buf);
+	crc_30_00 = ((crc >> 1) ^ (buf_value & 0x7fffffff)); 
+	crc_31	  = (crc & 0x1) ^ 
+				((crc & (0x1 << 4)) >> 4) ^ 
+				((crc & (0x1 << 8)) >> 8) ^ 
+				((crc & (0x1 << 12)) >> 12) ^ 
+				((crc & (0x1 << 17)) >> 17) ^ 
+				((crc & (0x1 << 20)) >> 20) ^ 
+				((crc & (0x1 << 23)) >> 23) ^ 
+				((crc & (0x1 << 28)) >> 28) ^ 
+				((buf_value & (0x1 << 31)) >> 31);
+				
+	return	( ( (crc_31 << 31) & 0x80000000 ) | (crc_30_00 & 0x7fffffff ));				
+}
 
 int main(int argc,char **argv)
 {
@@ -124,11 +151,12 @@ int main(int argc,char **argv)
 	char *ifname;
 	struct egse2dm egse_cmd;
 	uint8_t *p_egse_cmd;
-	uint32_t data_len;
+	uint32_t data_len, crc;
+	uint8_t *tx_buffer;
+	uint32_t buf_offset = 0;
+	uint32_t egse2dm_full_size;
 
 	p_egse_cmd = (uint8_t *)&egse_cmd;
-
-
 	if (argc != 2)
 	{
 		printf("usage : sendCAN <CAN interface>\n");
@@ -156,10 +184,30 @@ int main(int argc,char **argv)
 		return -2;
 	}
 
-	egse2dm_cmd_init(&egse_cmd);
+	egse2dm_cmd_init((struct egse2dm *)p_egse_cmd);
 	data_len = sizeof(struct egse2dm);
-	printf("Using %s send size: %d\n", ifname, data_len);
-	nbytes = can_data_send_scatter(can_socket, p_egse_cmd, data_len);
+	/* start to do crc procedure */
+	crc = nbytes = 0;
+        while (nbytes < data_len)
+        {
+        	crc = crc32(crc, (char *)(p_egse_cmd + nbytes), 4);
+        	nbytes += 4;
+        }
+	printf("TX CAN CRC without header: 0x%x\n", crc);
+
+	egse2dm_full_size = sizeof(struct egse2dm_header_t) + sizeof(struct egse2dm);
+	tx_buffer = calloc(1, egse2dm_full_size);
+
+	buf_offset = 0;
+	memcpy(tx_buffer + buf_offset, &data_len, 4);
+	buf_offset += 4;
+	memcpy(tx_buffer + buf_offset, &crc, 4);
+	buf_offset += 4;
+	memcpy(tx_buffer + buf_offset, p_egse_cmd, sizeof(struct egse2dm));
+
+	printf("Using %s send egse2dm with header size: %d\n", ifname, egse2dm_full_size);
+	nbytes = can_data_send_scatter(can_socket, tx_buffer, egse2dm_full_size);
 	printf("[%lf] TX CAN total %d bytes has been send. \n", get_curr_time(), nbytes);
+	free(tx_buffer);
 	return 0;
 }

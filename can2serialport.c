@@ -17,11 +17,17 @@
 #include <arpa/inet.h>
 #include "gpio_sync_timer/DIInterrupt.h"
 
-#define RX_COUNTDOWN		(6)
+#define RX_COUNTDOWN		(7)
+#define CAN_RX_BUFF_SIZE        (RX_COUNTDOWN * 8)
 #define THREADS_NUM		(7)
 #define USER_BAUD_RATE           (B921600)
 #define IMU_SIZE (sizeof(struct IMU_filtered_data_t))
 #define GPSR_SIZE (sizeof(struct NSPO_GPSR_SCI_TLM_t))
+
+struct egse2dm_header_t {
+	uint32_t payload_len;
+	uint32_t crc;
+} __attribute__((packed));
 
 /*
 As the mutex lock is stored in global (static) memory it can be 
@@ -117,7 +123,7 @@ void *rs422_tx_downlink_thread(void *arg)
 		pthread_mutex_unlock(info->mutex);
 		
 		header_offset = 0;
-		tx_buffer = calloc(1,frame_full_size);
+		tx_buffer = calloc(1, frame_full_size);
 
 		memcpy(tx_buffer + header_offset, &frame.payload_len, 4);
 		header_offset += 4;
@@ -161,6 +167,9 @@ int main(int argc,char **argv)
 	int setflag = 0;
 	int  status = 0;
 	int rx_count = RX_COUNTDOWN;
+	uint8_t rx_buff[CAN_RX_BUFF_SIZE];
+	uint32_t buf_offset = 0;
+	struct egse2dm_header_t *egse2dm_cmd_header;
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
 	pthread_t gpio_thread_id;
@@ -223,13 +232,22 @@ int main(int argc,char **argv)
 		rx_nbytes = read(socket_can, &frame, sizeof(frame));
 		if (rx_nbytes > 0) {
 			rx_count--;
-			//hex_dump("rx hex", (uint8_t *)&frame, sizeof(frame));
 			if (frame.can_id & CAN_ERR_FLAG) {
 				fprintf(stderr, "error frame\n");
-			} 
+			}
+			for (idx= 0; idx < CAN_MAX_DLEN; ++idx) {
+				rx_buff[buf_offset] = frame.data[idx];
+				buf_offset ++;
+			}
 			if (rx_count == 0) {
 				clock_gettime(CLOCK_MONOTONIC, &ts);
-				printf("[%lld.%.9ld]CAN RX done!! \n",(long long)ts.tv_sec, ts.tv_nsec);
+				egse2dm_cmd_header = (struct egse2dm_header_t *)rx_buff;
+				if(crc_checker(egse2dm_cmd_header->crc, (char *)(rx_buff + sizeof(struct egse2dm_header_t)), 
+				               egse2dm_cmd_header->payload_len) == 0) {
+					fprintf(stderr, "[%lld.%.9ld] CRC ERROR !!!!\n", (long long)ts.tv_sec, ts.tv_nsec);
+					exit(EXIT_FAILURE);
+				}
+				printf("[%lld.%.9ld]CAN RX done and CRC PASS!! \n",(long long)ts.tv_sec, ts.tv_nsec);
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 				{
 					pthread_mutex_lock(rs422_tx_info[idx].mutex);
@@ -237,6 +255,8 @@ int main(int argc,char **argv)
 					pthread_mutex_unlock(rs422_tx_info[idx].mutex);
 				}
 				rx_count = RX_COUNTDOWN;
+				buf_offset = 0;
+				//hex_dump("rx hex", rx_buff, CAN_RX_BUFF_SIZE);
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 				{
 					pthread_cond_signal(rs422_tx_info[idx].cond);

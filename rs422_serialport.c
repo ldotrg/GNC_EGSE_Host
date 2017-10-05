@@ -206,3 +206,17 @@ uint32_t invert_crc32(uint32_t crc)
         printf("  After Invert CRC==> 0x%x\n", crc_tmp);
         return inv_crc;
 }
+
+uint32_t crc_checker(uint32_t rx_crc, const char *buf, uint32_t size)
+{
+	
+	uint32_t crc = 0, total = 0;
+        while (total < size)
+        {
+        	crc = crc32(crc, (char *)(buf + total), 4);
+        	total += 4;
+        }
+        //printf("crc 0x%x, rx_crc: 0x%x\n", crc, rx_crc);
+        return (rx_crc == crc);
+
+}
