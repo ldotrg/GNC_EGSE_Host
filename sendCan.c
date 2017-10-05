@@ -83,20 +83,48 @@ int egse2dm_cmd_init(struct egse2dm *cmd)
 	return 0;
 }
 
+int32_t can_data_send_scatter(int fd, uint8_t *payload, uint32_t data_len)
+{
+	uint32_t sent_len = 0, cur_len = 0, nbytes = 0, i = 0;
+	uint32_t sent_len_max = CAN_BUFFER_SIZE;
+	struct can_frame frame;
+	int ret;
+
+	frame.can_id  = 0x123;
+	frame.can_dlc = 8;
+	while (1) {
+		sent_len = (data_len - cur_len) >=  sent_len_max ?
+				   sent_len_max : (data_len - cur_len);
+		if (sent_len > 0) {
+			memset(&frame.data, 0, sent_len_max);
+			for (i = 0; i < sent_len; i++, payload++) {
+				frame.data[i] = *payload;
+			}
+			ret = write(fd, &frame, sizeof(struct can_frame));
+			if (ret < 0)
+				goto error;
+			cur_len += sent_len;
+			nbytes += ret;
+		} else {
+			ret = nbytes;
+			break;
+		}
+	}
+error:
+	return ret;
+}
 
 
 int main(int argc,char **argv)
 {
-	int can_socket, i;
+	int can_socket;
 	int nbytes = 0;
 	struct sockaddr_can addr;
-	struct can_frame frame;
 	struct ifreq ifr;
 	char *ifname;
 	struct egse2dm egse_cmd;
 	uint8_t *p_egse_cmd;
-	uint32_t sent_len_max = CAN_BUFFER_SIZE;
-	uint32_t data_len, cur_len = 0;
+	uint32_t data_len;
 
 	p_egse_cmd = (uint8_t *)&egse_cmd;
 
@@ -129,30 +157,9 @@ int main(int argc,char **argv)
 	}
 
 	egse2dm_cmd_init(&egse_cmd);
-	frame.can_id  = 0x123;
-	frame.can_dlc = 8;
 	data_len = sizeof(struct egse2dm);
-	printf("[dungru:%d:%s] egse2dm cmd size: %d\n", __LINE__, __FUNCTION__, data_len);
-	while (1) {
-		uint32_t sent_len;
-		sent_len = (data_len - cur_len) >=  sent_len_max ?
-				   sent_len_max : (data_len - cur_len);
-		if (sent_len > 0) {
-			memset(&frame.data, 0, sent_len_max);
-			for (i = 0; i < sent_len; i++, p_egse_cmd++) {
-				frame.data[i] = *p_egse_cmd;
-			}
-			nbytes += write(can_socket, &frame, sizeof(struct can_frame));
-			if (nbytes < 0)
-				goto error;
-
-			cur_len += sent_len;
-		} else
-			break;
-	}
-
-	printf("using %s to write %d bytes\n", ifname, nbytes);
-	printf("Before send to kernel space %lf\n", get_curr_time());
-error:
+	printf("Using %s send size: %d\n", ifname, data_len);
+	nbytes = can_data_send_scatter(can_socket, p_egse_cmd, data_len);
+	printf("[%lf] TX CAN total %d bytes has been send. \n", get_curr_time(), nbytes);
 	return 0;
 }

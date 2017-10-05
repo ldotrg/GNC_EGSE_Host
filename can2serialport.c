@@ -23,17 +23,6 @@
 #define IMU_SIZE (sizeof(struct IMU_filtered_data_t))
 #define GPSR_SIZE (sizeof(struct NSPO_GPSR_SCI_TLM_t))
 
-#if 0
-#define RATE_TABLE_TXDELAY
-#define IMU_TXDELAY
-#else
-#define RATE_TABLE_TXDELAY do { \
-			usleep(400); \
-		} while (0)
-#define IMU_TXDELAY do { \
-			usleep(1500); \
-		} while (0)
-#endif
 /*
 As the mutex lock is stored in global (static) memory it can be 
     initialized with PTHREAD_MUTEX_INITIALIZER.

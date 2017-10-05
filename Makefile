@@ -33,7 +33,7 @@ deps := $(OBJECTS:%.o=%.o.d)
 %.o: %.c
 	$(CC) -c $< -o $@ $(CFLAGS)
 
-$(BIN_IMAGE): $(OBJECTS)
+$(BIN_IMAGE): $(OBJECTS) sendCan
 	$(CXX) -o $@ $(OBJECTS) $(CXXFLAGS) $(CFLAGS)
 #	$(CC) -o $@ $(OBJECTS) $(CFLAGS)
 	$(CC) -Wall -g sendCan.c -o sendCan
