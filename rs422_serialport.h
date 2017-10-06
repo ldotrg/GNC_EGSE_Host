@@ -31,6 +31,7 @@ typedef enum _ENUM_RS422_CMD_ID {
 struct data_frame_header_t {
 	uint32_t payload_len;
 	uint32_t crc;
+	uint32_t seq_no;
 } __attribute__((packed));
 /* 
 *
@@ -39,8 +40,8 @@ struct data_frame_header_t {
 *
 */
 struct SDT_INTERFACER_t {
-    struct NSPO_GPSR_SCI_TLM_t     GPS_data_1;  // 622 bytes
-    struct NSPO_GPSR_SCI_TLM_t     GPS_data_2;  // 622 bytes (redundancy)
+    struct NSPO_GPSR_SCI_TLM_t     GPS_data_1;  // 624 bytes
+    struct NSPO_GPSR_SCI_TLM_t     GPS_data_2;  // 624 bytes (redundancy)
     struct IMU_filtered_data_t     IMU_filtered_data_1;  // 96 bytes
     struct IMU_filtered_data_t     IMU_filtered_data_2;  // 96 bytes (redundancy)
 } __attribute__((packed));

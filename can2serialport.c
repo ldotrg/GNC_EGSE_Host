@@ -91,6 +91,8 @@ void *rs422_tx_downlink_thread(void *arg)
 	uint32_t wdlen;
 
 	info = (struct thread_info_t *) arg;
+	// hex_dump("arg", (uint8_t *)arg, sizeof(struct thread_info_t));
+	// hex_dump("info", (uint8_t *)info, sizeof(struct thread_info_t));
 	printf("Thread name: %s\n", info->thread_name);
 	info->rs422_fd  = open_port(info->port_name);
 	if (info->rs422_fd  < 0) {
@@ -106,35 +108,41 @@ void *rs422_tx_downlink_thread(void *arg)
 	crc = total = 0;
         while (total < frame.payload_len)
         {
-        	crc = crc32(crc, (char *)(arg + total), 4);
+        	crc = crc32(crc, (char *)(info->payload + total), 4);
         	total += 4;
         }
 
 	printf("  Total_size_with_payload_crc_handle total=%u \n", total);
 	printf("  pure_payload CRC crc=0x%08x \n", crc);
 	frame.crc = crc;
+	frame.seq_no = 0;
 	printf("%s: frame_full_size = %d\n", __FUNCTION__,frame_full_size);
 	//dump_thread_info(info);
 	while (1) {
 		pthread_mutex_lock(info->mutex);
-		while (~(info->go_flag & 0x1))
+		while (info->go_flag == 0) {
 			pthread_cond_wait(info->cond, info->mutex);
+		}
 		info->go_flag = 0;
 		pthread_mutex_unlock(info->mutex);
-		
-		header_offset = 0;
-		tx_buffer = calloc(1, frame_full_size);
-
-		memcpy(tx_buffer + header_offset, &frame.payload_len, 4);
-		header_offset += 4;
-		
-		memcpy(tx_buffer + header_offset, &frame.crc, 4);
-		header_offset += 4;
-		
-		memcpy(tx_buffer + header_offset, arg, frame.payload_len);
 		int i = 0;
 		for (i = 0; i < info->freq; ++i)
 		{
+			header_offset = 0;
+			tx_buffer = calloc(1, frame_full_size);
+
+			memcpy(tx_buffer + header_offset, &frame.payload_len, 4);
+			header_offset += 4;
+			
+			memcpy(tx_buffer + header_offset, &frame.crc, 4);
+			header_offset += 4;
+
+			frame.seq_no += 1;
+			memcpy(tx_buffer + header_offset, &frame.seq_no, 4);
+			header_offset += 4;
+			
+			memcpy(tx_buffer + header_offset, (uint8_t *)info->payload, frame.payload_len);
+
 			buf_offset = 0;
 			while(buf_offset < frame_full_size) {
 				wdlen = write(info->rs422_fd, tx_buffer + buf_offset, frame_full_size - buf_offset);
@@ -142,9 +150,10 @@ void *rs422_tx_downlink_thread(void *arg)
 					fprintf(stderr, "ERROR status %d\n", wdlen);
 				buf_offset += wdlen;
 			}
+			free(tx_buffer);
+			//hex_dump("gpsr02", tx_buffer, frame_full_size);
 		}
-		//hex_dump("gpsr02", tx_buffer, frame_full_size);
-		free(tx_buffer);
+		
 	}
 }
 
@@ -237,7 +246,7 @@ int main(int argc,char **argv)
 			}
 			for (idx= 0; idx < CAN_MAX_DLEN; ++idx) {
 				rx_buff[buf_offset] = frame.data[idx];
-				buf_offset ++;
+				buf_offset++;
 			}
 			if (rx_count == 0) {
 				clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -248,6 +257,7 @@ int main(int argc,char **argv)
 					exit(EXIT_FAILURE);
 				}
 				printf("[%lld.%.9ld]CAN RX done and CRC PASS!! \n",(long long)ts.tv_sec, ts.tv_nsec);
+#if 1
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 				{
 					pthread_mutex_lock(rs422_tx_info[idx].mutex);
@@ -258,9 +268,16 @@ int main(int argc,char **argv)
 				buf_offset = 0;
 				//hex_dump("rx hex", rx_buff, CAN_RX_BUFF_SIZE);
 				for (idx= 0; idx < THREADS_NUM; ++idx)
-				{
 					pthread_cond_signal(rs422_tx_info[idx].cond);
-				}
+#else
+				idx = 0;
+				pthread_mutex_lock(rs422_tx_info[idx].mutex);
+				rs422_tx_info[idx].go_flag = 1;
+				pthread_mutex_unlock(rs422_tx_info[idx].mutex);
+				rx_count = RX_COUNTDOWN;
+				buf_offset = 0;
+				pthread_cond_signal(rs422_tx_info[idx].cond);
+#endif
 			}
 		}
 	}

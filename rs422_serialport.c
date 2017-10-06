@@ -13,7 +13,9 @@ int open_port(char *portname)
 	if (fd < 0) {
 		fprintf(stderr, "Error: %d opening %s: %s\n", errno, portname, strerror (errno));
 		return errno;
-	}      
+	} else {
+		printf("Using %s to send\n", portname);
+	}
 
 	return (fd);
 }
