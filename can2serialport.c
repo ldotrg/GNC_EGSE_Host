@@ -23,6 +23,8 @@
 #define USER_BAUD_RATE           (B921600)
 #define IMU_SIZE (sizeof(struct IMU_filtered_data_t))
 #define GPSR_SIZE (sizeof(struct NSPO_GPSR_SCI_TLM_t))
+#define SINGLE_THREAD_DEBUG 0
+#define DEBUG_THREAD_IDX 5
 
 struct egse2dm_header_t {
 	uint32_t payload_len;
@@ -138,6 +140,7 @@ void *rs422_tx_downlink_thread(void *arg)
 			header_offset += 4;
 
 			frame.seq_no += 1;
+			//fprintf(stderr,"[%s] seq_no: %d\n", info->thread_name,frame.seq_no);
 			memcpy(tx_buffer + header_offset, &frame.seq_no, 4);
 			header_offset += 4;
 			
@@ -182,6 +185,7 @@ int main(int argc,char **argv)
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
 	pthread_t gpio_thread_id;
+	uint32_t rx_pktcnt = 0;
 	if((socket_can = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
 		perror("Error while opening socket");
 		return -1;
@@ -217,7 +221,8 @@ int main(int argc,char **argv)
 	imu_pattern_init(&imu_data);
 	rate_table_pattern_init(&ratetable);
 	gpsr_pattern_init((void *)&gpsr_data);
-#if 1
+
+#if (SINGLE_THREAD_DEBUG == 0)
 	for (idx = 0; idx < THREADS_NUM; idx++) {
 		printf("In main: creating thread %d\n", idx);
 		ret = pthread_create(threads_id + idx, NULL, rs422_tx_downlink_thread, (void *) &rs422_tx_info[idx]);
@@ -227,7 +232,7 @@ int main(int argc,char **argv)
 		}
 	}
 #else /*debug purpose*/
-	idx = 0;
+	idx = DEBUG_THREAD_IDX;
 	ret = pthread_create(threads_id + idx, NULL, rs422_tx_downlink_thread, (void *) &rs422_tx_info[idx]);
 	if (ret) {
 		printf("ERROR; return code from pthread_create() is %d\n", ret);
@@ -256,8 +261,9 @@ int main(int argc,char **argv)
 					fprintf(stderr, "[%lld.%.9ld] CRC ERROR !!!!\n", (long long)ts.tv_sec, ts.tv_nsec);
 					exit(EXIT_FAILURE);
 				}
-				printf("[%lld.%.9ld]CAN RX done and CRC PASS!! \n",(long long)ts.tv_sec, ts.tv_nsec);
-#if 1
+				rx_pktcnt++;
+				printf("[%lld.%.9ld:%d]CAN RX done and CRC PASS!! \n",(long long)ts.tv_sec, ts.tv_nsec, rx_pktcnt);
+#if (SINGLE_THREAD_DEBUG == 0)
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 				{
 					pthread_mutex_lock(rs422_tx_info[idx].mutex);
@@ -270,7 +276,7 @@ int main(int argc,char **argv)
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 					pthread_cond_signal(rs422_tx_info[idx].cond);
 #else
-				idx = 0;
+				idx = DEBUG_THREAD_IDX;
 				pthread_mutex_lock(rs422_tx_info[idx].mutex);
 				rs422_tx_info[idx].go_flag = 1;
 				pthread_mutex_unlock(rs422_tx_info[idx].mutex);
