@@ -42,6 +42,6 @@ $(BIN_IMAGE2): sendCan.c
 .PHONY : clean
 clean:
 	rm -f $(BIN_IMAGE)
-	rm -f sendCan
+	rm -f $(BIN_IMAGE2)
 	find . -name "*.o" -type f -delete
 	find . -name "*.d" -type f -delete

@@ -70,8 +70,8 @@ public:
       //printf(" DI Interrupt channel is %d\n",args->SrcNum);
       for ( int32 i = startPort;i < startPort + portCount; ++i )
       {
+         syscall(509);
          print_time(i);
-         //printf(" DI port %d status:  0x%X\n\n", i, args->PortData[i-startPort]);
       }
    }
 };

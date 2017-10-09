@@ -71,6 +71,7 @@ struct thread_info_t {
 	uint32_t freq;
 	uint8_t go_flag;
 	void *payload;
+	uint32_t syscall_id;
 	pthread_mutex_t *mutex;
 	pthread_cond_t *cond;
 };

@@ -16,6 +16,7 @@
 #define BILLION 			1000000000L
 #define INLINE                        	__attribute__((always_inline))
 #define CAN_BUFFER_SIZE 8
+#define FTRACE_TIME_STAMP(id) do { syscall(id);} while (0)
 
 void clock_get_hw_time(struct timespec *ts)
 {
@@ -157,6 +158,7 @@ static void tx_can_handler(int sig, siginfo_t *si, void *uc)
 	printf() is not async-signal-safe; see signal-safety(7).
 	Nevertheless, we use printf() here as a simple way of
 	showing that the handler was called. */
+#if 0
 	int or;
 	timer_t *tidp;
 	tidp = si->si_value.sival_ptr;
@@ -166,7 +168,8 @@ static void tx_can_handler(int sig, siginfo_t *si, void *uc)
 	} else {
 		printf("[%lf] sig: %d overrun count = %d\n", get_curr_time() ,sig ,or);
 	}
-	/* Critical section need to protect*/
+#endif
+	/* Critical section need to protect??*/
 	send_flag = 1;
 	/* Critical section END*/
 	if (timer_settime(timerid, 0, &its, NULL) == -1)
@@ -266,19 +269,21 @@ int main(int argc,char **argv)
 
 	if (timer_settime(timerid, 0, &its, NULL) == -1)
 		errExit("timer_settime");
-
 	while (1){
 		if (send_flag && tx_loop > 0)
 		{
+			FTRACE_TIME_STAMP(510);
 			nbytes = can_data_send_scatter(can_socket, tx_buffer, egse2dm_full_size);
-			printf("[%lf:%02d] TX CAN total %d bytes has been send. \n", get_curr_time(),tx_loop ,nbytes);
-			/* Critical section need to protect*/
+			printf("[%lf:%02d] TX %s %d bytes just send. \n", get_curr_time(),tx_loop ,ifname ,nbytes);
+			/* Critical section need to protect??*/
 			send_flag = 0;
 			/* Critical section END*/
 			tx_loop--;
 		}
-		if (tx_loop == 0)
+		if (tx_loop == 0) {
 			timer_delete(timerid);
+			break;
+		}
 	}
 	free(tx_buffer);
 	return 0;
