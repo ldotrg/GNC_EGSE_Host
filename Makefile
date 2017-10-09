@@ -1,4 +1,5 @@
 BIN_IMAGE = readCan
+BIN_IMAGE2 = sendCan
 ###### C flags #####
 CC = gcc
 CFLAGS = -Wall -g
@@ -24,7 +25,7 @@ OBJECTS += $(patsubst %.c, %.o, $(C_SOURCES))
 
 ##### Target malloc LIB#####
 
-all: $(BIN_IMAGE)
+all: $(BIN_IMAGE) $(BIN_IMAGE2)
 
 deps := $(OBJECTS:%.o=%.o.d)
 
@@ -33,11 +34,12 @@ deps := $(OBJECTS:%.o=%.o.d)
 %.o: %.c
 	$(CC) -c $< -o $@ $(CFLAGS)
 
-$(BIN_IMAGE): $(OBJECTS) sendCan
+$(BIN_IMAGE): $(OBJECTS)
 	$(CXX) -o $@ $(OBJECTS) $(CXXFLAGS) $(CFLAGS)
 #	$(CC) -o $@ $(OBJECTS) $(CFLAGS)
-	$(CC) -Wall -g sendCan.c -o sendCan
-
+$(BIN_IMAGE2): sendCan.c
+	$(CC) -Wall -g sendCan.c -o sendCan -lrt
+.PHONY : clean
 clean:
 	rm -f $(BIN_IMAGE)
 	rm -f sendCan

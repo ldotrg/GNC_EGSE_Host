@@ -7,10 +7,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include "stdint.h"
+#include <stdint.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include <time.h>
+#include <signal.h>
 
 #define BILLION 			1000000000L
 #define INLINE                        	__attribute__((always_inline))
@@ -18,14 +19,14 @@
 
 void clock_get_hw_time(struct timespec *ts)
 {
-  clock_gettime(CLOCK_MONOTONIC, ts);
+	clock_gettime(CLOCK_MONOTONIC, ts);
 }
 
 static struct timespec ts;
 double get_curr_time(void) 
 {
-    clock_get_hw_time(&ts);
-    return ts.tv_sec + (double)ts.tv_nsec/(double)BILLION;
+	clock_get_hw_time(&ts);
+	return ts.tv_sec + (double)ts.tv_nsec/(double)BILLION;
 }
 
 #define TVC_SIZE 6
@@ -142,30 +143,66 @@ uint32_t crc32(uint32_t crc, const char *buf, uint32_t len)
 	return	( ( (crc_31 << 31) & 0x80000000 ) | (crc_30_00 & 0x7fffffff ));				
 }
 
+#define CLOCKID CLOCK_REALTIME
+#define SIG SIGUSR1
+#define errExit(msg)    do { perror(msg); exit(EXIT_FAILURE);} while (0)
+timer_t timerid;
+struct itimerspec its;
+volatile uint32_t send_flag = 0;
+
+static void tx_can_handler(int sig, siginfo_t *si, void *uc)
+{
+	/* Note: calling printf() from a signal handler is not safe
+	(and should not be done in production programs), since
+	printf() is not async-signal-safe; see signal-safety(7).
+	Nevertheless, we use printf() here as a simple way of
+	showing that the handler was called. */
+	int or;
+	timer_t *tidp;
+	tidp = si->si_value.sival_ptr;
+	or = timer_getoverrun(*tidp);
+	if (or == -1) {
+		errExit("timer_getoverrun");
+	} else {
+		printf("[%lf] sig: %d overrun count = %d\n", get_curr_time() ,sig ,or);
+	}
+	/* Critical section need to protect*/
+	send_flag = 1;
+	/* Critical section END*/
+	if (timer_settime(timerid, 0, &its, NULL) == -1)
+		errExit("timer_settime");
+}
+
 int main(int argc,char **argv)
 {
 	int can_socket;
 	int nbytes = 0;
 	struct sockaddr_can addr;
 	struct ifreq ifr;
-	char *ifname;
+	char *ifname = "can1";
 	struct egse2dm egse_cmd;
 	uint8_t *p_egse_cmd;
 	uint32_t data_len, crc;
 	uint8_t *tx_buffer;
 	uint32_t buf_offset = 0;
 	uint32_t egse2dm_full_size;
-
-	p_egse_cmd = (uint8_t *)&egse_cmd;
-	if (argc != 2)
-	{
-		printf("usage : sendCAN <CAN interface>\n");
-		argv[1] = "can1";
-		printf("Use sendCan can1\n");
+	uint32_t tx_loop = 40;
+	int opt;
+	struct sigevent sev;
+	struct sigaction sa;
+	while ((opt = getopt(argc, argv, "I:l:")) != -1) {
+		switch (opt) {
+			case 'I':
+				ifname = optarg;
+				break;
+			case 'l':
+				tx_loop = atoi(optarg);
+				break;
+			default: /* '?' */
+				printf("Use Default sendCan interface can1, tx_loop = 40\n");
+		}
 	}
-
-	ifname = argv[1];
- 
+	p_egse_cmd = (uint8_t *)&egse_cmd;
 	if((can_socket = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0)
 	{
 		perror("Error while opening socket");
@@ -204,10 +241,45 @@ int main(int argc,char **argv)
 	memcpy(tx_buffer + buf_offset, &crc, 4);
 	buf_offset += 4;
 	memcpy(tx_buffer + buf_offset, p_egse_cmd, sizeof(struct egse2dm));
-
 	printf("Using %s send egse2dm with header size: %d\n", ifname, egse2dm_full_size);
-	nbytes = can_data_send_scatter(can_socket, tx_buffer, egse2dm_full_size);
-	printf("[%lf] TX CAN total %d bytes has been send. \n", get_curr_time(), nbytes);
+
+	/* Establish handler for timer signal */
+	printf("Establishing handler for signal %d\n", SIG);
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = tx_can_handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIG, &sa, NULL) == -1)
+		errExit("sigaction");
+
+	/* Create the timer */
+	sev.sigev_notify = SIGEV_SIGNAL;
+	sev.sigev_signo = SIG;
+	sev.sigev_value.sival_ptr = &timerid;
+	timer_create(CLOCKID, &sev, &timerid);
+
+	printf("timer ID is 0x%lx\n", (long) timerid);
+	/* Start the timer */
+	its.it_value.tv_sec = 0;
+	its.it_value.tv_nsec = 50000000;
+	its.it_interval.tv_sec = 0;
+	its.it_interval.tv_nsec = 0;
+
+	if (timer_settime(timerid, 0, &its, NULL) == -1)
+		errExit("timer_settime");
+
+	while (1){
+		if (send_flag && tx_loop > 0)
+		{
+			nbytes = can_data_send_scatter(can_socket, tx_buffer, egse2dm_full_size);
+			printf("[%lf:%02d] TX CAN total %d bytes has been send. \n", get_curr_time(),tx_loop ,nbytes);
+			/* Critical section need to protect*/
+			send_flag = 0;
+			/* Critical section END*/
+			tx_loop--;
+		}
+		if (tx_loop == 0)
+			timer_delete(timerid);
+	}
 	free(tx_buffer);
 	return 0;
 }

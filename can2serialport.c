@@ -17,15 +17,21 @@
 #include <arpa/inet.h>
 #include "gpio_sync_timer/DIInterrupt.h"
 
+
+#define SINGLE_THREAD_DEBUG 0
+#define DEBUG_THREAD_IDX 5
+#define CFG_GPIO_ENABLE 0
+
+
 #define RX_COUNTDOWN		(7)
 #define CAN_RX_BUFF_SIZE        (RX_COUNTDOWN * 8)
 #define THREADS_NUM		(7)
 #define USER_BAUD_RATE           (B921600)
 #define IMU_SIZE (sizeof(struct IMU_filtered_data_t))
 #define GPSR_SIZE (sizeof(struct NSPO_GPSR_SCI_TLM_t))
-#define SINGLE_THREAD_DEBUG 0
-#define DEBUG_THREAD_IDX 5
+#define BILLION 			1000000000L
 
+static struct timespec ts;
 struct egse2dm_header_t {
 	uint32_t payload_len;
 	uint32_t crc;
@@ -68,6 +74,18 @@ struct thread_info_t rs422_tx_info[THREADS_NUM] ={
 	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          &gpsr01_mutex,     &gpsr01_cond},
 	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          &gpsr02_mutex,     &gpsr02_cond}
 };
+
+
+void clock_get_hw_time(struct timespec *ts)
+{
+	clock_gettime(CLOCK_MONOTONIC, ts);
+}
+
+double get_curr_time(void) 
+{
+	clock_get_hw_time(&ts);
+	return ts.tv_sec + (double)ts.tv_nsec/(double)BILLION;
+}
 
 void dump_thread_info(struct thread_info_t *info)
 {
@@ -128,7 +146,7 @@ void *rs422_tx_downlink_thread(void *arg)
 		info->go_flag = 0;
 		pthread_mutex_unlock(info->mutex);
 		int i = 0;
-		for (i = 0; i < info->freq; ++i)
+		for (i = 0; i < info->freq; i++)
 		{
 			header_offset = 0;
 			tx_buffer = calloc(1, frame_full_size);
@@ -184,8 +202,10 @@ int main(int argc,char **argv)
 	struct egse2dm_header_t *egse2dm_cmd_header;
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
-	pthread_t gpio_thread_id;
 	uint32_t rx_pktcnt = 0;
+#if (CFG_GPIO_ENABLE == 1)
+	pthread_t gpio_thread_id;
+#endif
 	if((socket_can = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
 		perror("Error while opening socket");
 		return -1;
@@ -210,13 +230,14 @@ int main(int argc,char **argv)
 	if (status != 0)
 		printf("setsockopt fail\n");
 	printf("using %s to read\n", ifname);
-
+#if (CFG_GPIO_ENABLE == 1)
 	/* GPIO Create*/
 	ret = pthread_create(&gpio_thread_id, NULL, gpio_ttl_thread, NULL);
 	if (ret) {
 		printf("ERROR; return code from gpio_thread_id is %d\n", ret);
 		exit(-1);
 	}
+#endif
 	/*Data Pattern init*/
 	imu_pattern_init(&imu_data);
 	rate_table_pattern_init(&ratetable);
@@ -242,7 +263,6 @@ int main(int argc,char **argv)
 
 	while(1)
 	{
-		struct timespec ts;
 		rx_nbytes = read(socket_can, &frame, sizeof(frame));
 		if (rx_nbytes > 0) {
 			rx_count--;
@@ -257,12 +277,12 @@ int main(int argc,char **argv)
 				clock_gettime(CLOCK_MONOTONIC, &ts);
 				egse2dm_cmd_header = (struct egse2dm_header_t *)rx_buff;
 				if(crc_checker(egse2dm_cmd_header->crc, (char *)(rx_buff + sizeof(struct egse2dm_header_t)), 
-				               egse2dm_cmd_header->payload_len) == 0) {
-					fprintf(stderr, "[%lld.%.9ld] CRC ERROR !!!!\n", (long long)ts.tv_sec, ts.tv_nsec);
+						egse2dm_cmd_header->payload_len) == 0) {
+					fprintf(stderr, "[%lf] CRC ERROR !!!!\n", get_curr_time());
 					exit(EXIT_FAILURE);
 				}
 				rx_pktcnt++;
-				printf("[%lld.%.9ld:%d]CAN RX done and CRC PASS!! \n",(long long)ts.tv_sec, ts.tv_nsec, rx_pktcnt);
+				printf("[%lf:%d]CAN RX done and CRC PASS!! \n",get_curr_time() , rx_pktcnt);
 #if (SINGLE_THREAD_DEBUG == 0)
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 				{
@@ -291,8 +311,9 @@ int main(int argc,char **argv)
 	for (idx = 0; idx < THREADS_NUM; idx++) {
 		pthread_join(threads_id[idx], NULL);
 	}
+#if (CFG_GPIO_ENABLE == 1)
 	pthread_join(gpio_thread_id, NULL);
-
+#endif
 	return 0;
 }
 
