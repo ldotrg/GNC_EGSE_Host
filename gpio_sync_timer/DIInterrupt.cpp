@@ -48,10 +48,11 @@ using namespace Automation::BDaq;
 #define  deviceDescription  L"PCI-1730,BID#0"
 int32    startPort = 2;   
 int32    portCount = 1;   
-
+unsigned int gpio_cnt = 0;
 void print_time(int port)
 {
-	fprintf(stderr, "[%lf] 1pps GPIO DI port %d\n",get_curr_time(), port);
+	fprintf(stderr, "[%lf:%d] 1pps GPIO DI port %d\n",get_curr_time(), gpio_cnt,port);
+	__sync_add_and_fetch(&gpio_cnt, 1);
 }
 
 inline void waitAnyKey()
