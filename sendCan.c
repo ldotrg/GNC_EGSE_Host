@@ -169,11 +169,16 @@ static void tx_can_handler(int sig, siginfo_t *si, void *uc)
 		printf("[%lf] sig: %d overrun count = %d\n", get_curr_time() ,sig ,or);
 	}
 #endif
-	/* Critical section need to protect??*/
-	send_flag = 1;
-	/* Critical section END*/
-	if (timer_settime(timerid, 0, &its, NULL) == -1)
-		errExit("timer_settime");
+	if (si->si_value.sival_ptr != &timerid) {
+		return;
+	} else {
+        	/* Critical section need to protect??*/
+		send_flag = 1;
+		/* Critical section END*/
+		if (timer_settime(timerid, 0, &its, NULL) == -1)
+			errExit("timer_settime");
+	}
+
 }
 
 int main(int argc,char **argv)

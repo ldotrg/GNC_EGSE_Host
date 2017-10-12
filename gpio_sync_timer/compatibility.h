@@ -11,6 +11,9 @@
 //#else
 //#define CHK_RESULT(ret) 
 //#endif
+extern "C" {
+#include "rs422_serialport.h"
+}
 
 #if !defined(_WIN32)
 #  define SLEEP(second)  sleep(second)

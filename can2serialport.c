@@ -81,7 +81,7 @@ void clock_get_hw_time(struct timespec *ts)
 	clock_gettime(CLOCK_MONOTONIC, ts);
 }
 
-double get_curr_time(void) 
+double get_curr_time(void)
 {
 	clock_get_hw_time(&ts);
 	return ts.tv_sec + (double)ts.tv_nsec/(double)BILLION;
@@ -204,9 +204,6 @@ int main(int argc,char **argv)
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
 	uint32_t rx_pktcnt = 0;
-#if (CFG_GPIO_ENABLE == 1)
-	pthread_t gpio_thread_id;
-#endif
 	if((socket_can = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
 		perror("Error while opening socket");
 		return -1;
@@ -231,14 +228,6 @@ int main(int argc,char **argv)
 	if (status != 0)
 		printf("setsockopt fail\n");
 	printf("using %s to read\n", ifname);
-#if (CFG_GPIO_ENABLE == 1)
-	/* GPIO Create*/
-	ret = pthread_create(&gpio_thread_id, NULL, gpio_ttl_thread, NULL);
-	if (ret) {
-		printf("ERROR; return code from gpio_thread_id is %d\n", ret);
-		exit(EXIT_FAILURE);
-	}
-#endif
 	/*Data Pattern init*/
 	imu_pattern_init(&imu_data);
 	rate_table_pattern_init(&ratetable);
@@ -258,6 +247,15 @@ int main(int argc,char **argv)
 	ret = pthread_create(threads_id + idx, NULL, rs422_tx_downlink_thread, (void *) &rs422_tx_info[idx]);
 	if (ret) {
 		printf("ERROR; return code from pthread_create() is %d\n", ret);
+		exit(EXIT_FAILURE);
+	}
+#endif
+#if (CFG_GPIO_ENABLE == 1)
+	/* GPIO Create*/
+	pthread_t gpio_thread_id;
+	ret = pthread_create(&gpio_thread_id, NULL, gpio_ttl_thread, NULL);
+	if (ret) {
+		printf("ERROR; return code from gpio_thread_id is %d\n", ret);
 		exit(EXIT_FAILURE);
 	}
 #endif
@@ -283,7 +281,7 @@ int main(int argc,char **argv)
 				}
 				rx_pktcnt++;
 				FTRACE_TIME_STAMP(500);
-				printf("[%lf:%d]CAN RX done and CRC PASS!! \n",get_curr_time() , rx_pktcnt);
+				printf("[%lf:%d]CAN RX CRC PASS!! \n",get_curr_time() , rx_pktcnt);
 
 #if (CFG_SINGLE_THREAD_DEBUG == 0)
 				for (idx= 0; idx < THREADS_NUM; ++idx)

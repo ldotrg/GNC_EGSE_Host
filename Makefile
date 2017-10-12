@@ -10,7 +10,8 @@ CXX = g++
 
 CXXFLAGS =-g \
 	  -I./gpio_sync_timer \
-	  -lbiodaq
+	  -lbiodaq \
+	  -I.
 
 ##### C Source #####
 C_SOURCES += can2serialport.c \
@@ -22,8 +23,6 @@ CPP_SOURCES = gpio_sync_timer/DIInterrupt.cpp
 ##### OBJECTS #####
 OBJECTS = $(patsubst %.cpp, %.o, $(CPP_SOURCES))
 OBJECTS += $(patsubst %.c, %.o, $(C_SOURCES))
-
-##### Target malloc LIB#####
 
 all: $(BIN_IMAGE) $(BIN_IMAGE2)
 

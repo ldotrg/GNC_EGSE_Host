@@ -51,9 +51,7 @@ int32    portCount = 1;
 
 void print_time(int port)
 {
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%lld.%.9ld]DI port %d !! \n",(long long)ts.tv_sec, ts.tv_nsec, port);
+	fprintf(stderr, "[%lf] 1pps GPIO DI port %d\n",get_curr_time(), port);
 }
 
 inline void waitAnyKey()
