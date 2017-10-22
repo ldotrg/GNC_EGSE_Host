@@ -1,5 +1,4 @@
 BIN_IMAGE = readCan
-BIN_IMAGE2 = sendCan
 ###### C flags #####
 CC = gcc
 CFLAGS = -Wall -g
@@ -24,7 +23,7 @@ CPP_SOURCES = gpio_sync_timer/DIInterrupt.cpp
 OBJECTS = $(patsubst %.cpp, %.o, $(CPP_SOURCES))
 OBJECTS += $(patsubst %.c, %.o, $(C_SOURCES))
 
-all: $(BIN_IMAGE) $(BIN_IMAGE2)
+all: $(BIN_IMAGE)
 
 deps := $(OBJECTS:%.o=%.o.d)
 
@@ -36,11 +35,8 @@ deps := $(OBJECTS:%.o=%.o.d)
 $(BIN_IMAGE): $(OBJECTS)
 	$(CXX) -o $@ $(OBJECTS) $(CXXFLAGS) $(CFLAGS)
 #	$(CC) -o $@ $(OBJECTS) $(CFLAGS)
-$(BIN_IMAGE2): sendCan.c
-	$(CC) -Wall -g sendCan.c -o sendCan -lrt
 .PHONY : clean
 clean:
 	rm -f $(BIN_IMAGE)
-	rm -f $(BIN_IMAGE2)
 	find . -name "*.o" -type f -delete
 	find . -name "*.d" -type f -delete

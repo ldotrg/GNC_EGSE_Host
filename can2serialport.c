@@ -19,8 +19,8 @@
 
 
 #define CFG_SINGLE_THREAD_DEBUG   0
-#define CFG_DEBUG_THREAD_IDX      5
-#define CFG_GPIO_ENABLE           1
+#define CFG_DEBUG_THREAD_IDX      4
+#define CFG_GPIO_ENABLE           0
 
 
 #define RX_COUNTDOWN		(7)
@@ -69,7 +69,7 @@ struct thread_info_t rs422_tx_info[THREADS_NUM] ={
 	{"imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           501,        &imu01_mutex,      &imu01_cond},
 	{"rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,    0, (void *) &(ratetable.rate.x), 502,        &rate_tbl_x_mutex, &rate_tbl_x_cond},
 	{"rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,    0, (void *) &(ratetable.rate.y), 503,        &rate_tbl_y_mutex, &rate_tbl_y_cond},
-	{"rate_tbl_z",   "/dev/ttyAP3",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), 504,        &rate_tbl_z_mutex, &rate_tbl_z_cond},
+	{"rate_tbl_z",   "/dev/ttyAP7",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), 504,        &rate_tbl_z_mutex, &rate_tbl_z_cond},
 	{"imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           505,        &imu02_mutex,      &imu02_cond},
 	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          506,        &gpsr01_mutex,     &gpsr01_cond},
 	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          507,        &gpsr02_mutex,     &gpsr02_cond}
@@ -132,11 +132,10 @@ void *rs422_tx_downlink_thread(void *arg)
         	total += 4;
         }
 
-	printf("  Total_size_with_payload_crc_handle total=%u \n", total);
 	printf("  pure_payload CRC crc=0x%08x \n", crc);
 	frame.crc = crc;
 	frame.seq_no = 0;
-	printf("%s: frame_full_size = %d\n", __FUNCTION__,frame_full_size);
+	printf("[%s] frame_full_size = %d\n", info->thread_name,frame_full_size);
 	//dump_thread_info(info);
 	while (1) {
 		pthread_mutex_lock(info->mutex);
@@ -174,8 +173,7 @@ void *rs422_tx_downlink_thread(void *arg)
 			free(tx_buffer);
 			//hex_dump("gpsr02", tx_buffer, frame_full_size);
 		}
-		FTRACE_TIME_STAMP(info->syscall_id);
-		
+		FTRACE_TIME_STAMP(info->syscall_id);	
 	}
 }
 
@@ -264,6 +262,8 @@ int main(int argc,char **argv)
 	{
 		rx_nbytes = read(socket_can, &frame, sizeof(frame));
 		if (rx_nbytes > 0) {
+			if (rx_count == RX_COUNTDOWN)
+				FTRACE_TIME_STAMP(511);
 			rx_count--;
 			if (frame.can_id & CAN_ERR_FLAG) {
 				fprintf(stderr, "error frame\n");
@@ -280,9 +280,7 @@ int main(int argc,char **argv)
 					exit(EXIT_FAILURE);
 				}
 				rx_pktcnt++;
-				FTRACE_TIME_STAMP(500);
-				printf("[%lf:%d]CAN RX CRC PASS!! \n",get_curr_time() , rx_pktcnt);
-
+				//printf("[%lf:%d]CAN RX CRC PASS!! \n",get_curr_time() , rx_pktcnt);
 #if (CFG_SINGLE_THREAD_DEBUG == 0)
 				for (idx= 0; idx < THREADS_NUM; ++idx)
 				{
