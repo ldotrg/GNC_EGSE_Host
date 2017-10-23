@@ -19,7 +19,11 @@ def counting_actual_size(file, output):
 
 file_input = open("logg.txt","r")
 file_out = open("output.txt","w+")
+#plot_file = open("plot_data_input.txt", "w+")
 logger_size = counting_actual_size(file_input, file_out)
+file_input.close()
+file_out.close()
+
 
 with open("output.txt", "r") as file_out:
 	data = file_out.readlines()
@@ -32,9 +36,17 @@ for idx, element in enumerate(data):
 		temp_list = re.findall("\d+\.\d+", data[idx + 19])
 		end_time = float(temp_list[0])
 		trip_time_ms_list.append((end_time - start_time) * 1000)
-print("Count: %d" % (len(trip_time_ms_list)))
+print("Cycle count: %d" % (len(trip_time_ms_list)))
 print("Avg: %f ms" % (sum(trip_time_ms_list)/len(trip_time_ms_list)))
 print("Max: %f ms" % (max(trip_time_ms_list)))
 print("Min: %f ms" % (min(trip_time_ms_list)))
 print("std: %f " % (numpy.std(trip_time_ms_list)))
 
+with open("plot_data_input.txt", "w") as file_out:
+    for idx in range(len(trip_time_ms_list)):
+        file_out.write(str(idx+1) + " " + str(trip_time_ms_list[idx]) +"\n")
+
+print "Please use the following command to plot:"
+print "gnuplot -e 'in=\"plot_data_input.txt\";out=\"output1.png\";gtitle=\"EGSE RX CAN and TX RS422 driver IO time\"; \
+       count=%d;max=%f;avg=%f;sigma=%f' plot.gp" \
+       % (len(trip_time_ms_list),max(trip_time_ms_list),sum(trip_time_ms_list)/len(trip_time_ms_list),numpy.std(trip_time_ms_list))

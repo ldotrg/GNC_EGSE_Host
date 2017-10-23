@@ -2,7 +2,7 @@
 
 # Init the tracing
 mount -t debugfs nodev /sys/kernel/debug
-echo 0 > /sys/kernel/debug/tracing/tracing_on
+sudo echo 0 > /sys/kernel/debug/tracing/tracing_on
 echo 0 > /sys/kernel/debug/tracing/trace
 echo 65535 > /sys/kernel/debug/tracing/buffer_size_kb
 echo "mono" > /sys/kernel/debug/tracing/trace_clock
