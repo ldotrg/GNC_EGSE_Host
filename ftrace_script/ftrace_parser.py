@@ -36,11 +36,13 @@ for idx, element in enumerate(data):
 		temp_list = re.findall("\d+\.\d+", data[idx + 19])
 		end_time = float(temp_list[0])
 		trip_time_ms_list.append((end_time - start_time) * 1000)
-print("Cycle count: %d" % (len(trip_time_ms_list)))
-print("Avg: %f ms" % (sum(trip_time_ms_list)/len(trip_time_ms_list)))
-print("Max: %f ms" % (max(trip_time_ms_list)))
-print("Min: %f ms" % (min(trip_time_ms_list)))
-print("std: %f " % (numpy.std(trip_time_ms_list)))
+print("22 lines per cycle count\n")
+
+print("|Round trip count | %d |" % (len(trip_time_ms_list)))
+print("|Avg| %f ms |" % (sum(trip_time_ms_list)/len(trip_time_ms_list)))
+print("|Max| %f ms |" % (max(trip_time_ms_list)))
+print("|Min| %f ms |" % (min(trip_time_ms_list)))
+print("|sigma| %f  |" % (numpy.std(trip_time_ms_list)))
 
 with open("plot_data_input.txt", "w") as file_out:
     for idx in range(len(trip_time_ms_list)):
