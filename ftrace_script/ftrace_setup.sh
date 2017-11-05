@@ -11,17 +11,22 @@ echo "mono" > /sys/kernel/debug/tracing/trace_clock
 #echo function > /sys/kernel/debug/tracing/current_tracer
 #echo "32640" > /sys/kernel/debug/tracing/set_ftrace_pid
 
-# Specific function
-#echo :mod:adv17v35x > set_ftrace_filter
-#echo serialadv_start_tx > set_ftrace_filter
+##### Function Tracer #####
+echo function > /sys/kernel/debug/tracing/current_tracer
+echo :mod:adv17v35x > /sys/kernel/debug/tracing/set_ftrace_filter
+echo :mod:pcan > /sys/kernel/debug/tracing/set_ftrace_filter
+echo serialadv_start_tx > /sys/kernel/debug/tracing/set_ftrace_filter
+echo pcan_pci_irqhandler >> /sys/kernel/debug/tracing/set_ftrace_filter
+cat /sys/kernel/debug/tracing/set_ftrace_filter
 
+##### Event tracer #####
 #IRQ PCAN
-echo nop > /sys/kernel/debug/tracing/current_tracer
-echo "irq==16" > /sys/kernel/debug/tracing/events/irq/irq_handler_entry/filter
-echo 1 > /sys/kernel/debug/tracing/events/irq/irq_handler_entry/enable
+#echo nop > /sys/kernel/debug/tracing/current_tracer
+#echo "irq==16" > /sys/kernel/debug/tracing/events/irq/irq_handler_entry/filter
+#echo 1 > /sys/kernel/debug/tracing/events/irq/irq_handler_entry/enable
 # system call
-echo "id>=500" > /sys/kernel/debug/tracing/events/raw_syscalls/sys_enter/filter
-echo 1 > /sys/kernel/debug/tracing/events/raw_syscalls/sys_enter/enable
+#echo "id>=500" > /sys/kernel/debug/tracing/events/raw_syscalls/sys_enter/filter
+#echo 1 > /sys/kernel/debug/tracing/events/raw_syscalls/sys_enter/enable
 
 #Use trace-cmd
 #sudo trace-cmd record -p nop -e irq_handler_entry -f "irq==16" -e sys_enter -f "id>=500"

@@ -7,16 +7,16 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <fcntl.h> 
-
+#include <sched.h>
+#include <pthread.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include <linux/can/error.h>
-#include <pthread.h>
 #include <stdint.h>
 #include "rs422_serialport.h"
 #include <arpa/inet.h>
 #include "gpio_sync_timer/DIInterrupt.h"
-
+#include <semaphore.h>
 
 #define CFG_SINGLE_THREAD_DEBUG   0
 #define CFG_DEBUG_THREAD_IDX      4
@@ -64,15 +64,15 @@ struct IMU_filtered_data_t imu_data;
 struct ProAxeSE_data_t ratetable;
 struct NSPO_GPSR_SCI_TLM_t gpsr_data;
 
-struct thread_info_t rs422_tx_info[THREADS_NUM] ={
-	/*thread_name,    port_name,     rs422_fd, payload_size, freq, go_flag, payload,           syscall_id, mutex,             cond*/
-	{"imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           501,        &imu01_mutex,      &imu01_cond},
-	{"rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,    0, (void *) &(ratetable.rate.x), 502,        &rate_tbl_x_mutex, &rate_tbl_x_cond},
-	{"rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,    0, (void *) &(ratetable.rate.y), 503,        &rate_tbl_y_mutex, &rate_tbl_y_cond},
-	{"rate_tbl_z",   "/dev/ttyAP7",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), 504,        &rate_tbl_z_mutex, &rate_tbl_z_cond},
-	{"imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           505,        &imu02_mutex,      &imu02_cond},
-	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          506,        &gpsr01_mutex,     &gpsr01_cond},
-	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          507,        &gpsr02_mutex,     &gpsr02_cond}
+struct thread_info_t rs422_tx_info[THREADS_NUM] = {
+	/*thread_name,    port_name,     rs422_fd, payload_size, freq, go_flag, payload,           syscall_id, mutex,             cond,            core_id*/
+	{"imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           501,        &imu01_mutex,      &imu01_cond,      2},
+	{"rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,    0, (void *) &(ratetable.rate.x), 502,        &rate_tbl_x_mutex, &rate_tbl_x_cond, 2},
+	{"rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,    0, (void *) &(ratetable.rate.y), 503,        &rate_tbl_y_mutex, &rate_tbl_y_cond, 3},
+	{"rate_tbl_z",   "/dev/ttyAP7",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), 504,        &rate_tbl_z_mutex, &rate_tbl_z_cond, 3},
+	{"imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           505,        &imu02_mutex,      &imu02_cond,      4},
+	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          506,        &gpsr01_mutex,     &gpsr01_cond,     4},
+	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          507,        &gpsr02_mutex,     &gpsr02_cond,     5}
 };
 
 static struct timespec ts;
@@ -98,7 +98,6 @@ void dump_thread_info(struct thread_info_t *info)
 	hex_dump("data", info->payload, info->payload_size);
 }
 
-
 void *rs422_tx_downlink_thread(void *arg)
 {
 	struct thread_info_t *info = NULL;
@@ -114,6 +113,12 @@ void *rs422_tx_downlink_thread(void *arg)
 	// hex_dump("arg", (uint8_t *)arg, sizeof(struct thread_info_t));
 	// hex_dump("info", (uint8_t *)info, sizeof(struct thread_info_t));
 	printf("Thread name: %s\n", info->thread_name);
+#if 1
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(info->core_id , &cpuset);
+	pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+#endif
 	info->rs422_fd  = open_port(info->port_name);
 	if (info->rs422_fd  < 0) {
 		fprintf(stderr, "open port %s error\n", info->port_name);
@@ -145,10 +150,10 @@ void *rs422_tx_downlink_thread(void *arg)
 		info->go_flag = 0;
 		pthread_mutex_unlock(info->mutex);
 		int i = 0;
+		tx_buffer = calloc(1, frame_full_size);
 		for (i = 0; i < info->freq; i++)
 		{
 			header_offset = 0;
-			tx_buffer = calloc(1, frame_full_size);
 
 			memcpy(tx_buffer + header_offset, &frame.payload_len, 4);
 			header_offset += 4;
@@ -170,10 +175,10 @@ void *rs422_tx_downlink_thread(void *arg)
 					fprintf(stderr, "ERROR status %d\n", wdlen);
 				buf_offset += wdlen;
 			}
-			free(tx_buffer);
 			//hex_dump("gpsr02", tx_buffer, frame_full_size);
 		}
-		FTRACE_TIME_STAMP(info->syscall_id);	
+		free(tx_buffer);
+		//FTRACE_TIME_STAMP(info->syscall_id);
 	}
 }
 
@@ -202,6 +207,21 @@ int main(int argc,char **argv)
 	int32_t idx = 0, ret = 0;
 	pthread_t threads_id[THREADS_NUM];
 	uint32_t rx_pktcnt = 0;
+#if 1
+	int core_id = 1;
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);       //clears the cpuset
+	CPU_SET(core_id , &cpuset); //set CPU 1 on cpuset
+	/*
+	* cpu affinity for the calling thread
+	* first parameter is the pid, 0 = calling thread
+	* second parameter is the size of your cpuset
+	* third param is the cpuset in which your thread will be
+	* placed. Each bit represents a CPU
+	*/
+	pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+	//sched_setaffinity(0, sizeof(cpuset), &cpuset);
+#endif
 	if((socket_can = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
 		perror("Error while opening socket");
 		return -1;
@@ -262,17 +282,21 @@ int main(int argc,char **argv)
 	{
 		rx_nbytes = read(socket_can, &frame, sizeof(frame));
 		if (rx_nbytes > 0) {
-			if (rx_count == RX_COUNTDOWN)
+#if 1
+			if (rx_count == RX_COUNTDOWN )
 				FTRACE_TIME_STAMP(511);
+#endif
 			rx_count--;
 			if (frame.can_id & CAN_ERR_FLAG) {
 				fprintf(stderr, "error frame\n");
+				exit(EXIT_FAILURE);
 			}
 			for (idx= 0; idx < CAN_MAX_DLEN; ++idx) {
 				rx_buff[buf_offset] = frame.data[idx];
 				buf_offset++;
 			}
 			if (rx_count == 0) {
+				//FTRACE_TIME_STAMP(511);
 				egse2dm_cmd_header = (struct egse2dm_header_t *)rx_buff;
 				if(crc_checker(egse2dm_cmd_header->crc, (char *)(rx_buff + sizeof(struct egse2dm_header_t)), 
 						egse2dm_cmd_header->payload_len) == 0) {
@@ -282,7 +306,7 @@ int main(int argc,char **argv)
 				rx_pktcnt++;
 				//printf("[%lf:%d]CAN RX CRC PASS!! \n",get_curr_time() , rx_pktcnt);
 #if (CFG_SINGLE_THREAD_DEBUG == 0)
-				for (idx= 0; idx < THREADS_NUM; ++idx)
+				for (idx = 0; idx < THREADS_NUM; ++idx)
 				{
 					pthread_mutex_lock(rs422_tx_info[idx].mutex);
 					rs422_tx_info[idx].go_flag = 1;

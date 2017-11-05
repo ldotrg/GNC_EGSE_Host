@@ -3,7 +3,8 @@ BIN_IMAGE = readCan
 CC = gcc
 CFLAGS = -Wall -g
 CFLAGS += -I./
-CFLAGS +=-pthread
+CFLAGS += -pthread
+CFLAGS += -D_GNU_SOURCE
 ##### C++ flags #####
 CXX = g++
 
