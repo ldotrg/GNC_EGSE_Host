@@ -63,7 +63,20 @@ struct ProAxeSE_data_t {
 
 typedef void *(*work_thread_f)(void *arg);
 
+typedef enum _ENUM_THREAD_IDX_T {
+	IMU01 = 0,
+	RATE_X,
+	RATE_Y,
+	RATE_Z,
+	IMU02,
+	GPSR01,
+	GPSR02,
+	THREADS_NUM
+}ENUM_THREAD_IDX_T;
+
+
 struct thread_info_t {
+	uint8_t thread_idx;
 	char thread_name[12];
 	char port_name[12];
 	int32_t rs422_fd;

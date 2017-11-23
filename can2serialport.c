@@ -20,12 +20,19 @@
 
 #define CFG_SINGLE_THREAD_DEBUG   0
 #define CFG_DEBUG_THREAD_IDX      4
-#define CFG_GPIO_ENABLE           0
+#define CFG_RS422_THREAD_ENABLE_MASK (1 << IMU01 |  \
+				      1 << RATE_X | \
+				      1 << RATE_Y | \
+				      1 << RATE_Z | \
+				      1 << IMU02  | \
+				      1 << GPSR01 | \
+				      1 << GPSR02) 
 
+#define CFG_GPIO_ENABLE           0
+#define CFG_HEADER_APPEND_ENABLE  1
 
 #define RX_COUNTDOWN		(7)
 #define CAN_RX_BUFF_SIZE        (RX_COUNTDOWN * 8)
-#define THREADS_NUM		(7)
 #define USER_BAUD_RATE          (B921600)
 #define IMU_SIZE (sizeof(struct IMU_filtered_data_t))
 #define GPSR_SIZE (sizeof(struct NSPO_GPSR_SCI_TLM_t))
@@ -65,14 +72,14 @@ struct ProAxeSE_data_t ratetable;
 struct NSPO_GPSR_SCI_TLM_t gpsr_data;
 
 struct thread_info_t rs422_tx_info[THREADS_NUM] = {
-	/*thread_name,    port_name,     rs422_fd, payload_size, freq, go_flag, payload,           syscall_id, mutex,             cond,            core_id*/
-	{"imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           501,        &imu01_mutex,      &imu01_cond,      2},
-	{"rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,    0, (void *) &(ratetable.rate.x), 502,        &rate_tbl_x_mutex, &rate_tbl_x_cond, 2},
-	{"rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,    0, (void *) &(ratetable.rate.y), 503,        &rate_tbl_y_mutex, &rate_tbl_y_cond, 3},
-	{"rate_tbl_z",   "/dev/ttyAP7",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), 504,        &rate_tbl_z_mutex, &rate_tbl_z_cond, 3},
-	{"imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           505,        &imu02_mutex,      &imu02_cond,      4},
-	{"gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          506,        &gpsr01_mutex,     &gpsr01_cond,     4},
-	{"gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          507,        &gpsr02_mutex,     &gpsr02_cond,     5}
+	/*thread_idx, thread_name,    port_name,     rs422_fd, payload_size, freq, go_flag, payload,           syscall_id, mutex,             cond,            core_id*/
+	{IMU01 , "imu01",        "/dev/ttyAP0",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           501,        &imu01_mutex,      &imu01_cond,      2},
+	{RATE_X , "rate_tbl_x",   "/dev/ttyAP1",  -1, 4,            50,    0, (void *) &(ratetable.rate.x), 502,        &rate_tbl_x_mutex, &rate_tbl_x_cond, 2},
+	{RATE_Y , "rate_tbl_y",   "/dev/ttyAP2",  -1, 4,            50,    0, (void *) &(ratetable.rate.y), 503,        &rate_tbl_y_mutex, &rate_tbl_y_cond, 3},
+	{RATE_Z , "rate_tbl_z",   "/dev/ttyAP7",  -1, 4,            50,    0, (void *) &(ratetable.rate.z), 504,        &rate_tbl_z_mutex, &rate_tbl_z_cond, 3},
+	{IMU02 , "imu02",        "/dev/ttyAP4",  -1, IMU_SIZE,     10,    0, (void *) &imu_data,           505,        &imu02_mutex,      &imu02_cond,      4},
+	{GPSR01 , "gpsr01",       "/dev/ttyAP5",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          506,        &gpsr01_mutex,     &gpsr01_cond,     4},
+	{GPSR02 , "gpsr02",       "/dev/ttyAP6",  -1, GPSR_SIZE,    1,     0, (void *) &gpsr_data,          507,        &gpsr02_mutex,     &gpsr02_cond,     5}
 };
 
 static struct timespec ts;
@@ -108,6 +115,10 @@ void *rs422_tx_downlink_thread(void *arg)
 	struct data_frame_header_t frame;
 	uint32_t buf_offset;
 	uint32_t wdlen;
+	uint32_t *rate;
+	struct IMU_filtered_data_t *imu_data;
+	struct NSPO_GPSR_SCI_TLM_t *gpsr_data;
+
 
 	info = (struct thread_info_t *) arg;
 	// hex_dump("arg", (uint8_t *)arg, sizeof(struct thread_info_t));
@@ -126,8 +137,38 @@ void *rs422_tx_downlink_thread(void *arg)
 	}
 	// Set the configureation of the port 
 	set_interface_attribs(info->rs422_fd, USER_BAUD_RATE, 0);
-	frame_full_size = info->payload_size + sizeof(struct data_frame_header_t);
+	frame_full_size = info->payload_size + (CFG_HEADER_APPEND_ENABLE ? sizeof(struct data_frame_header_t) : 0);
 	frame.payload_len = info->payload_size;
+	/* paylod */
+	switch(info->thread_idx) {
+		case IMU01:
+			imu_data = info->payload;
+			break;
+		case RATE_X:
+			rate = info->payload;
+			*rate = (*rate + 1 ) % 360;
+			break;
+		case RATE_Y:
+			rate = info->payload;
+			*rate = (*rate + 1 ) % 360;
+			break;
+		case RATE_Z:
+			rate = info->payload;
+			*rate = (*rate + 1 ) % 360;
+			break;
+		case IMU02:
+			imu_data = info->payload;
+			break;
+		case GPSR01:
+			gpsr_data = info->payload;
+			break;
+		case GPSR02:
+			gpsr_data = info->payload;
+			break;
+		default:
+			fprintf(stderr, "There is no %s thread !!!!\n", info->thread_name);
+			exit(EXIT_FAILURE);
+	}
 
 	/* start to do crc procedure */
 	crc = total = 0;
@@ -154,7 +195,7 @@ void *rs422_tx_downlink_thread(void *arg)
 		for (i = 0; i < info->freq; i++)
 		{
 			header_offset = 0;
-
+#if CFG_HEADER_APPEND_ENABLE
 			memcpy(tx_buffer + header_offset, &frame.payload_len, 4);
 			header_offset += 4;
 			
@@ -165,7 +206,7 @@ void *rs422_tx_downlink_thread(void *arg)
 			//fprintf(stderr,"[%s] seq_no: %d\n", info->thread_name,frame.seq_no);
 			memcpy(tx_buffer + header_offset, &frame.seq_no, 4);
 			header_offset += 4;
-			
+#endif	/* CFG_HEADER_APPEND_ENABLE */	
 			memcpy(tx_buffer + header_offset, (uint8_t *)info->payload, frame.payload_len);
 
 			buf_offset = 0;
@@ -182,14 +223,16 @@ void *rs422_tx_downlink_thread(void *arg)
 	}
 }
 
-
+#if CFG_GPIO_ENABLE
 void *gpio_ttl_thread(void *arg)
 {
+
 	int *ret = NULL;
 	gpio_ttl_init_wrapper();
 	return ret;
-}
 
+}
+#endif /* CFG_GPIO_ENABLE */
 int main(int argc,char **argv)
 {
 	int socket_can;
@@ -250,24 +293,18 @@ int main(int argc,char **argv)
 	imu_pattern_init(&imu_data);
 	rate_table_pattern_init(&ratetable);
 	gpsr_pattern_init((void *)&gpsr_data);
-
-#if (CFG_SINGLE_THREAD_DEBUG == 0)
+	printf("RS422 Enable MASK: 0x%x",CFG_RS422_THREAD_ENABLE_MASK);
 	for (idx = 0; idx < THREADS_NUM; idx++) {
+		if (~((1 << idx) & CFG_RS422_THREAD_ENABLE_MASK))
+			continue;
 		printf("In main: creating thread %d\n", idx);
 		ret = pthread_create(threads_id + idx, NULL, rs422_tx_downlink_thread, (void *) &rs422_tx_info[idx]);
 		if (ret) {
 			printf("ERROR; return code from pthread_create() is %d\n", ret);
 			exit(EXIT_FAILURE);
 		}
+
 	}
-#else /*debug purpose*/
-	idx = CFG_DEBUG_THREAD_IDX;
-	ret = pthread_create(threads_id + idx, NULL, rs422_tx_downlink_thread, (void *) &rs422_tx_info[idx]);
-	if (ret) {
-		printf("ERROR; return code from pthread_create() is %d\n", ret);
-		exit(EXIT_FAILURE);
-	}
-#endif
 #if (CFG_GPIO_ENABLE == 1)
 	/* GPIO Create*/
 	pthread_t gpio_thread_id;
@@ -276,7 +313,7 @@ int main(int argc,char **argv)
 		printf("ERROR; return code from gpio_thread_id is %d\n", ret);
 		exit(EXIT_FAILURE);
 	}
-#endif
+#endif /* CFG_GPIO_ENABLE */
 
 	while(1)
 	{
@@ -305,9 +342,10 @@ int main(int argc,char **argv)
 				}
 				rx_pktcnt++;
 				//printf("[%lf:%d]CAN RX CRC PASS!! \n",get_curr_time() , rx_pktcnt);
-#if (CFG_SINGLE_THREAD_DEBUG == 0)
 				for (idx = 0; idx < THREADS_NUM; ++idx)
 				{
+					if (~((1 << idx) & CFG_RS422_THREAD_ENABLE_MASK))
+						continue;
 					pthread_mutex_lock(rs422_tx_info[idx].mutex);
 					rs422_tx_info[idx].go_flag = 1;
 					pthread_mutex_unlock(rs422_tx_info[idx].mutex);
@@ -315,22 +353,18 @@ int main(int argc,char **argv)
 				rx_count = RX_COUNTDOWN;
 				buf_offset = 0;
 				//hex_dump("rx hex", rx_buff, CAN_RX_BUFF_SIZE);
-				for (idx= 0; idx < THREADS_NUM; ++idx)
+				for (idx= 0; idx < THREADS_NUM; ++idx) {
+					if (~((1 << idx) & CFG_RS422_THREAD_ENABLE_MASK))
+						continue;
 					pthread_cond_signal(rs422_tx_info[idx].cond);
-#else /*debug purpose*/
-				idx = CFG_DEBUG_THREAD_IDX;
-				pthread_mutex_lock(rs422_tx_info[idx].mutex);
-				rs422_tx_info[idx].go_flag = 1;
-				pthread_mutex_unlock(rs422_tx_info[idx].mutex);
-				rx_count = RX_COUNTDOWN;
-				buf_offset = 0;
-				pthread_cond_signal(rs422_tx_info[idx].cond);
-#endif
+				}
 			}
 		}
 	}
 	/* wait for all threads to complete */
 	for (idx = 0; idx < THREADS_NUM; idx++) {
+		if (~((1 << idx) & CFG_RS422_THREAD_ENABLE_MASK))
+			continue;
 		pthread_join(threads_id[idx], NULL);
 	}
 #if (CFG_GPIO_ENABLE == 1)
@@ -349,6 +383,8 @@ static __attribute__((destructor)) void finish(void)
 	int idx;
 	for (idx = 0; idx < THREADS_NUM; ++idx)
 	{
+		if (~((1 << idx) & CFG_RS422_THREAD_ENABLE_MASK))
+			continue;
 		close(rs422_tx_info[idx].rs422_fd);
 	}
 }
